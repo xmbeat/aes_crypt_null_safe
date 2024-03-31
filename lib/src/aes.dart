@@ -1147,10 +1147,7 @@ class _Aes {
     if ((_aesMode != AesMode.ecb && _aesMode != AesMode.ctr) && _aesIV.isEmpty) {
       throw AesCryptArgumentError(
           'The initialization vector is empty. It can not be empty when AES mode is not ECB or CTR.');
-    } else if (data.length % 16 != 0) {
-      throw AesCryptArgumentError(
-          'Invalid data length for AES: ${data.length} bytes.');
-    }
+    } 
 
     Uint8List encData = Uint8List(data.length); // returned cipher text;
     Uint8List t = Uint8List(
@@ -1170,7 +1167,7 @@ class _Aes {
             }
           }
           block16 = aesEncryptBlock(t);
-          encData.setRange(i, i + 16, block16);
+          encData.setRange(i, (i+16 < data.length ? i + 16: data.length), block16);
         }
         break;
       case AesMode.cbc:
@@ -1181,7 +1178,7 @@ class _Aes {
             t[j] = ((i + j) < data.length ? data[i + j] : 0) ^ block16[j];
           }
           block16 = aesEncryptBlock(t);
-          encData.setRange(i, i + 16, block16);
+          encData.setRange(i, (i+16 < data.length ? i + 16: data.length), block16);
         }
         break;
       case AesMode.cfb:
@@ -1192,7 +1189,7 @@ class _Aes {
             // XOR the cipher output with the plaintext.
             block16[j] = ((i + j) < data.length ? data[i + j] : 0) ^ block16[j];
           }
-          encData.setRange(i, i + 16, block16);
+          encData.setRange(i, (i+16 < data.length ? i + 16: data.length), block16);
         }
         break;
       case AesMode.ofb:
@@ -1203,7 +1200,7 @@ class _Aes {
             // XOR the cipher output with the plaintext.
             block16[j] = ((i + j) < data.length ? data[i + j] : 0) ^ t[j];
           }
-          encData.setRange(i, i + 16, block16);
+          encData.setRange(i, (i+16 < data.length ? i + 16: data.length), block16);
           block16 = Uint8List.fromList(t);
         }
         break;
@@ -1218,13 +1215,12 @@ class _Aes {
           Uint8List cipheredCounter = counterCipher.aesEncrypt(counterBytes);
           for(int j = 0; j < 16; j++){
             if (i+j < data.length){
-              t[j] = cipheredCounter[j] ^ data[i + j];
+              encData[i+j] = cipheredCounter[j] ^ data[i+j];
             }
             else{
-              t[i] = 0;
+              break;
             }
           }
-          encData.setRange(i, i + 16, t);
           counter = counter + BigInt.one;
         }
         break;
@@ -1241,9 +1237,6 @@ class _Aes {
     if ((_aesMode != AesMode.ecb &&  _aesMode != AesMode.ctr) && _aesIV.isEmpty) {
       throw AesCryptArgumentError(
           'The initialization vector is empty. It can not be empty when AES mode is not ECB or CTR.');
-    } else if (data.length % 16 != 0) {
-      throw AesCryptArgumentError(
-          'Invalid data length for AES: ${data.length} bytes.');
     }
 
     Uint8List decData = Uint8List(data.length); // returned decrypted data;
@@ -1263,7 +1256,7 @@ class _Aes {
             }
           }
           x_block = aesDecryptBlock(t);
-          decData.setRange(i, i + 16, x_block);
+          decData.setRange(i, (i+16 <= data.length ? i + 16: data.length), x_block);
         }
         break;
       case AesMode.cbc:
@@ -1281,7 +1274,7 @@ class _Aes {
             x_block[j] = x_block[j] ^ block16[j];
           }
           block16 = Uint8List.fromList(t);
-          decData.setRange(i, i + 16, x_block);
+          decData.setRange(i, (i+16 <= data.length ? i + 16: data.length), x_block);
         }
         break;
       case AesMode.cfb:
@@ -1293,7 +1286,7 @@ class _Aes {
             x_block[j] = ((i + j) < data.length ? data[i + j] : 0) ^ x_block[j];
             block16[j] = data[i + j];
           }
-          decData.setRange(i, i + 16, x_block);
+          decData.setRange(i, (i+16 <= data.length ? i + 16: data.length), x_block);
         }
         break;
       case AesMode.ofb:
