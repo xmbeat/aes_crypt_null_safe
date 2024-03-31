@@ -7,3 +7,6 @@ doc/api/
 *.iml
 *.ipr
 *.iws
+.vscode
+.gitignore
+lib/bin/

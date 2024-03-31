@@ -46,6 +46,14 @@ void main() {
       Uint8List decData = crypt.aesDecrypt(encData);
       expect(srcData.isEqual(decData), equals(true));
     });
+
+    test('Test AES CTR encryption/decryption', (){
+      crypt.aesSetMode(AesMode.ctr, counter:  BigInt.from( Random().nextInt(1<<32-1)));
+      Uint8List encData = crypt.aesEncrypt(srcData);
+      Uint8List decData = crypt.aesDecrypt(encData);
+      expect(srcData.isEqual(decData), equals(true));
+    });
+
   });
 
   AesCrypt crypt = AesCrypt();

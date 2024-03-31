@@ -29,6 +29,9 @@ enum AesMode {
 
   /// OFB (Output Feedback)
   ofb,
+
+  /// CTR (Counter)
+  ctr
 }
 
 /// Wraps encryption and decryption methods and algorithms.
@@ -396,7 +399,8 @@ class AesCrypt {
   /// - [AesMode.cbc] - CBC (Cipher Block Chaining)
   /// - [AesMode.cfb] - CFB (Cipher Feedback)
   /// - [AesMode.ofb] - OFB (Output Feedback)
-  void aesSetMode(AesMode mode) => _aes.aesSetMode(mode);
+  /// - [AesMode.ctr] - CTR (Counter)
+  void aesSetMode(AesMode mode, {BigInt? counter}) => _aes.aesSetMode(mode, counter: counter);
 
   /// Sets AES encryption key [key], the initialization vector [iv] and AES mode [mode].
   void aesSetParams(Uint8List key, Uint8List iv, AesMode mode) {

@@ -1071,32 +1071,41 @@ class _Aes {
   // The initialization vector used in advanced cipher modes
   Uint8List _aesIV = Uint8List(0);
 
+  BigInt? _ctrInitial;
+
   // Returns AES initialization vector
   Uint8List? getIV() => _aesIV;
 
   // Returns AES encryption key
   Uint8List? getKey() => _aesKey;
+  
 
   // Sets AES encryption key [key] and the initialization vector [iv].
   void aesSetKeys(Uint8List key, [Uint8List? iv]) {
-    if (iv == null) {
-      throw AesCryptArgumentError(
-          'Null value not allowed. Provided ${key.length * 8} bits, expected 128, 192 or 256 bits.');
-    }
+    
 
     if (![16, 24, 32].contains(key.length)) {
-      throw AesCryptArgumentError(
+      throw AesCryptArgumentError( 
           'Invalid key length for AES. Provided ${key.length * 8} bits, expected 128, 192 or 256 bits.');
-    } else if (_aesMode != AesMode.ecb && iv.isNullOrEmpty) {
-      throw AesCryptArgumentError(
-          'The initialization vector is not specified. It can not be empty when AES mode is not ECB.');
-    } else if (iv.length != 16) {
+    }
+    
+    if (iv == null) {
+      if (_aesMode != AesMode.ctr && _aesMode != AesMode.ecb){
+        _aesIV = Uint8List(0);
+      }
+      else{
+        throw AesCryptArgumentError(
+            'The initialization vector is not specified. It can not be empty when AES mode is not ECB or CTR.');
+      }
+    }
+    else if (iv.length != 16) {
       throw AesCryptArgumentError(
           'Invalid IV length for AES. The initialization vector must be 128 bits long.');
     }
-
+    else{
+      _aesIV = Uint8List.fromList(iv);
+    }
     _aesKey = Uint8List.fromList(key);
-    _aesIV = iv.isNullOrEmpty ? Uint8List(0) : Uint8List.fromList(iv);
 
     _Nk = key.length ~/ 4;
     _Nr = _Nk + _Nb + 2;
@@ -1112,12 +1121,15 @@ class _Aes {
   // - [AesMode.cbc] - CBC (Cipher Block Chaining)
   // - [AesMode.cfb] - CFB (Cipher Feedback)
   // - [AesMode.ofb] - OFB (Output Feedback)
-  void aesSetMode(AesMode mode) {
-    if (_aesMode == AesMode.ecb && _aesMode != mode && _aesIV.isNullOrEmpty) {
+  // - [AesMode.ctr] - CTR (Counter)
+  void aesSetMode(AesMode mode, {BigInt? counter}) {
+    if (_aesMode == AesMode.ecb && _aesMode != mode && _aesIV.isNullOrEmpty && mode!= AesMode.ctr) {
       throw AesCryptArgumentError(
           'Failed to change AES mode. The initialization vector is not set. When changing the mode from ECB to another one, set IV at first.');
     }
     _aesMode = mode;
+    _ctrInitial = counter;
+
   }
 
   // Sets AES encryption key [key], the initialization vector [iv] and AES mode [mode].
@@ -1132,9 +1144,9 @@ class _Aes {
   Uint8List aesEncrypt(Uint8List data) {
     AesCryptArgumentError.checkNullOrEmpty(
         _aesKey, 'AES encryption key is null or empty.');
-    if (_aesMode != AesMode.ecb && _aesIV.isEmpty) {
+    if ((_aesMode != AesMode.ecb && _aesMode != AesMode.ctr) && _aesIV.isEmpty) {
       throw AesCryptArgumentError(
-          'The initialization vector is empty. It can not be empty when AES mode is not ECB.');
+          'The initialization vector is empty. It can not be empty when AES mode is not ECB or CTR.');
     } else if (data.length % 16 != 0) {
       throw AesCryptArgumentError(
           'Invalid data length for AES: ${data.length} bytes.');
@@ -1195,6 +1207,27 @@ class _Aes {
           block16 = Uint8List.fromList(t);
         }
         break;
+      case AesMode.ctr:
+        BigInt counter = (_ctrInitial??BigInt.zero) + BigInt.zero;
+        for (int i = 0; i < data.length; i += 16){
+          _Aes counterCipher = _Aes();
+          counterCipher.aesSetKeys(_aesKey);
+          counterCipher.aesSetMode(AesMode.ecb);
+          var counterBytes = bigIntToUint8List(counter);
+          counterBytes = fillOrTruncate(16, counterBytes);
+          Uint8List cipheredCounter = counterCipher.aesEncrypt(counterBytes);
+          for(int j = 0; j < 16; j++){
+            if (i+j < data.length){
+              t[j] = cipheredCounter[j] ^ data[i + j];
+            }
+            else{
+              t[i] = 0;
+            }
+          }
+          encData.setRange(i, i + 16, t);
+          counter = counter + BigInt.one;
+        }
+        break;
     }
     return encData;
   }
@@ -1205,9 +1238,9 @@ class _Aes {
   Uint8List aesDecrypt(Uint8List data) {
     AesCryptArgumentError.checkNullOrEmpty(
         _aesKey, 'AES encryption key null or is empty.');
-    if (_aesMode != AesMode.ecb && _aesIV.isEmpty) {
+    if ((_aesMode != AesMode.ecb &&  _aesMode != AesMode.ctr) && _aesIV.isEmpty) {
       throw AesCryptArgumentError(
-          'The initialization vector is empty. It can not be empty when AES mode is not ECB.');
+          'The initialization vector is empty. It can not be empty when AES mode is not ECB or CTR.');
     } else if (data.length % 16 != 0) {
       throw AesCryptArgumentError(
           'Invalid data length for AES: ${data.length} bytes.');
@@ -1266,8 +1299,35 @@ class _Aes {
       case AesMode.ofb:
         decData = aesEncrypt(data);
         break;
+      case AesMode.ctr:
+        decData = aesEncrypt(data);
+        break;
     }
     return decData;
+  }
+
+  Uint8List fillOrTruncate(int size, Uint8List data, [int paddingNumber = 0, bool fillAtStart = true]){
+    if (data.length == size){
+      return data;
+    }
+    if (data.length < size){
+      Uint8List result = Uint8List(size);
+      int offset = 0;
+      if (fillAtStart){
+        result.setRange(size-data.length, size, data);
+        offset = data.length;
+      }
+      else{
+        result.setRange(0, data.length, data);
+      }
+      for (int i = data.length; i < size; i++){
+        result[i-offset] = paddingNumber & 0xFF;
+      }
+      return result;
+    }
+    else{
+      return data.sublist(0, size);
+    }
   }
 
   // Encrypts the 16-byte data block.
@@ -1525,5 +1585,20 @@ class _Aes {
           _sBox[temp]; // add the substituted byte back
     }
     return w;
+  }
+
+  Uint8List bigIntToUint8List(BigInt bigInt) =>
+    bigIntToByteData(bigInt).buffer.asUint8List();
+
+  ByteData bigIntToByteData(BigInt bigInt) {
+    final data = ByteData((bigInt.bitLength / 8).ceil());
+    var _bigInt = bigInt;
+
+    for (var i = 1; i <= data.lengthInBytes; i++) {
+      data.setUint8(data.lengthInBytes - i, _bigInt.toUnsigned(8).toInt());
+      _bigInt = _bigInt >> 8;
+    }
+
+    return data;
   }
 }
