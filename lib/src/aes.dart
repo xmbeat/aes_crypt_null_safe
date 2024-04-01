@@ -1082,31 +1082,16 @@ class _Aes {
 
   // Sets AES encryption key [key] and the initialization vector [iv].
   void aesSetKeys(Uint8List key, [Uint8List? iv]) {
-    
-
     if (![16, 24, 32].contains(key.length)) {
       throw AesCryptArgumentError( 
           'Invalid key length for AES. Provided ${key.length * 8} bits, expected 128, 192 or 256 bits.');
     }
-    
-    if (iv == null) {
-      if (_aesMode != AesMode.ctr && _aesMode != AesMode.ecb){
-        _aesIV = Uint8List(0);
-      }
-      else{
-        throw AesCryptArgumentError(
-            'The initialization vector is not specified. It can not be empty when AES mode is not ECB or CTR.');
-      }
-    }
-    else if (iv.length != 16) {
+    if (iv != null && iv.length != 16){
       throw AesCryptArgumentError(
-          'Invalid IV length for AES. The initialization vector must be 128 bits long.');
+        'Invalid IV length for AES. The initialization vector must be 128 bits long.');
     }
-    else{
-      _aesIV = Uint8List.fromList(iv);
-    }
+    _aesIV = iv!=null? Uint8List.fromList(iv): Uint8List(0);
     _aesKey = Uint8List.fromList(key);
-
     _Nk = key.length ~/ 4;
     _Nr = _Nk + _Nb + 2;
     _w = Uint32List(_Nb * (_Nr! + 1));
@@ -1123,13 +1108,8 @@ class _Aes {
   // - [AesMode.ofb] - OFB (Output Feedback)
   // - [AesMode.ctr] - CTR (Counter)
   void aesSetMode(AesMode mode, {BigInt? counter}) {
-    if (_aesMode == AesMode.ecb && _aesMode != mode && _aesIV.isNullOrEmpty && mode!= AesMode.ctr) {
-      throw AesCryptArgumentError(
-          'Failed to change AES mode. The initialization vector is not set. When changing the mode from ECB to another one, set IV at first.');
-    }
     _aesMode = mode;
     _ctrInitial = counter;
-
   }
 
   // Sets AES encryption key [key], the initialization vector [iv] and AES mode [mode].
